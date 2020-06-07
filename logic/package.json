@@ -1,0 +1,17 @@
+{
+  "name": "house-real-estate",
+  "version": "1.0.0",
+  "description": "It is a prototype project with the ground-work done, which could be used to developed further a more solid DApp",
+  "main": "truffle-config.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Roberto Carlos",
+  "license": "ISC",
+  "dependencies": {
+    "@openzeppelin/contracts": "^3.0.1"
+  }
+}
