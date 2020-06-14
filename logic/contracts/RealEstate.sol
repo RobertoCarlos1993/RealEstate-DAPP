@@ -1,4 +1,5 @@
 pragma solidity ^0.5.8;
+pragma experimental ABIEncoderV2;
 
 import "./helper_contracts/ERC721.sol";
 
@@ -10,6 +11,7 @@ contract RealEstate is ERC721 {
     struct Asset {
         uint256 assetId;
         uint256 price;
+        string cid;
     }
 
     uint256 public assetsCount;
@@ -58,7 +60,7 @@ contract RealEstate is ERC721 {
 
         ownedAssetsCount[msg.sender]++;
         assetOwner[assetId] = msg.sender;
-        _seller.transfer(msg.value);
+        _seller.transfer(msg.value * 1000000000000000000);
         emit Transfer(_seller, msg.sender, assetId, msg.value);
     }
 
@@ -81,9 +83,17 @@ contract RealEstate is ERC721 {
         return assetMap[assetId].price;
     }
 
-    function addAsset(uint256 price, address to) public {
+    function allAssets() public view returns(Asset[] memory) {
+        Asset[] memory helper = new Asset[](assetsCount); // -- always be aware of array length --
+        for (uint i = 0; i < assetsCount; i++) {
+            helper[i] = assetMap[i];
+        }
+        return helper;
+    }
+
+    function addAsset(uint256 price, address to, string memory _cid) public {
         require(supervisor == msg.sender, 'Not Supervisor');
-        assetMap[assetsCount] = Asset(assetsCount, price);
+        assetMap[assetsCount] = Asset(assetsCount, price, _cid);
         mint(to, assetsCount);
         assetsCount = assetsCount+1;
     }
@@ -97,19 +107,19 @@ contract RealEstate is ERC721 {
     function build(uint256 assetId, uint256 value) public payable {
          require(isApprovedOrOwner(msg.sender, assetId), "Not an approved Owner");
          Asset memory oldAsset = assetMap[assetId];
-         assetMap[assetId] = Asset(oldAsset.assetId, oldAsset.price+value);
+         assetMap[assetId] = Asset(oldAsset.assetId, oldAsset.price + value, oldAsset.cid);
     }
 
     function appreciate(uint256 assetId, uint256 value) public {
         require(msg.sender == supervisor, "Not a manager");
         Asset memory oldAsset = assetMap[assetId];
-        assetMap[assetId] = Asset(oldAsset.assetId, oldAsset.price+value);
+        assetMap[assetId] = Asset(oldAsset.assetId, oldAsset.price+value, oldAsset.cid);
     }
 
-    function depreciate(uint256 assetId,uint256 value) public{
+    function depreciate(uint256 assetId,uint256 value) public {
         require(msg.sender==supervisor,"Not a Manager");
         Asset memory oldAsset = assetMap[assetId];
-        assetMap[assetId] = Asset(oldAsset.assetId, oldAsset.price - value);
+        assetMap[assetId] = Asset(oldAsset.assetId, oldAsset.price - value, oldAsset.cid);
     }
 
     function getAssetsSize() public view returns(uint){

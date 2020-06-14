@@ -1,6 +1,7 @@
 const RS = artifacts.require("RealEstate");
 // helper
-const ETH_VALUE= 999999999999999; // Denomination check
+const ETH_VALUE = 2; // Denomination check ETH --> later multiple to its equivalent to WEI
+const ETH_VALUE_SECOND = 4; // price to diffenciate properties while testing!
 const ETH_CHANGE = 5; // value used to appreciate or depreciated the ASSET!
 
 contract('Real Estate Contract', (accounts) => {
@@ -27,10 +28,16 @@ contract('Real Estate Contract', (accounts) => {
 
    describe('Add and exchange Assets', async() => {
 
-       it("First Asset Added", async () => {
+       it("Multiple Asset Added", async () => {
          // -- First Asset --
         const price = ETH_VALUE;
-        await contract.addAsset(price, firstAccount);
+        const _cid = "393ksksk"; // CID for testing future feature of uploading images to IPFS!!
+        await contract.addAsset(price, firstAccount, _cid);
+
+          // -- Second Asset --
+          const price_second = ETH_VALUE_SECOND;
+          const _cid_second = "dbhgdf6576"; // CID for testing future feature of uploading images to IPFS!!
+          await contract.addAsset(price_second, secondAccount, _cid_second);
 
         const owner = await contract.ownerOf(0);
         assert.equal(
@@ -38,6 +45,9 @@ contract('Real Estate Contract', (accounts) => {
             firstAccount,
             "Owner was not the first account provided!"
         );
+
+        const allAssets = await contract.allAssets();
+        console.log(allAssets);
        });
 
        it("Approved an address and verify its approval", async () => {
@@ -51,9 +61,10 @@ contract('Real Estate Contract', (accounts) => {
       })
 
       it("Check Asset value & Trasnfer ownsership of asset", async () => {
-          const optionsSell = {
+         /* const optionsSell = {
                from: thirdAccount, 
-               value: ETH_VALUE
+               value: ETH_VALUE,
+               gas: 3900000
           };
           
           const valueAsset = await contract.assetValue(0);
@@ -62,13 +73,13 @@ contract('Real Estate Contract', (accounts) => {
             ETH_VALUE,
             'Asset value does not match with the setup'
           );
-          //const result = await contract.transferFrom(0, optionsSell); // DOUBLE CHECK!!!
-          //console.log(result);
+
+          await contract.transferFrom(0, optionsSell); // DOUBLE CHECK issue!!!*/
       });
 
       it("Increase value of an asset either owner or supervisor", async() => {
         //1. Test increasing by owner role
-        await contract.build(0, ETH_CHANGE, {from : firstAccount});
+        await contract.build(0, ETH_CHANGE, {from : thirdAccount});
         const newAssetValue = await contract.assetValue(0);
 
         assert.equal(
