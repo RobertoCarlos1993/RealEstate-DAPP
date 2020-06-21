@@ -14,14 +14,19 @@ contract RealEstate is ERC721 {
         string cid;
     }
 
+    struct ApprovalFormat {
+        address approval_address;
+        uint256 percetange;
+    }
+
     uint256 public assetsCount;
     mapping(uint256 => Asset) public assetMap;
+    address public supervisor; // check auto-getter fnc Mohamed
 
-    address public supervisor;
-
-    mapping(uint256 => address) private assetOwner;
+    mapping(uint256 => address[]) private assetOwners; // Now it will hold multiple addrees for further flexibility
     mapping(address => uint256) private ownedAssetsCount;
-    mapping(uint256 => address) public assetApprovals;
+    mapping(uint256 => uint256) public countApproveAddresses;
+    mapping(uint256 => mapping(uint256 => ApprovalFormat)) public holdSharedApproval;
 
     constructor() public {
         supervisor = msg.sender;
@@ -29,12 +34,9 @@ contract RealEstate is ERC721 {
 
 
     //Events
-    event Transfer(address indexed from, address indexed to, uint256 indexed tokenId, uint256 price);
+    event Transfer(address indexed from, address[] indexed owners, uint256 indexed tokenId);
     event Approval(address indexed owner, address indexed approved, uint256 indexed tokenId);
-
-    function exposeSupervisor() public view returns (address) {
-        return supervisor;
-    }
+    event SharedApproval(address[] indexed owners, uint256 indexed tokenId);
 
     /// Functions inherit from ERC721 ///
 
@@ -44,37 +46,39 @@ contract RealEstate is ERC721 {
         return ownedAssetsCount[msg.sender];
     }
 
-    function ownerOf(uint256 assetId) public view returns (address) {
-        address owner = assetOwner[assetId];
-        require(owner != address(0), 'No Asset is real');
-        return owner;
+    function ownersOf(uint256 assetId) public view returns (address[] memory) {
+        address[] memory owners = assetOwners[assetId];
+        for(uint i = 0; i < owners.length; i++) {
+          require(owners[i] != address(0), 'No Asset is real');
+        }
+        return owners;
     }
 
-    function transferFrom(uint256 assetId) public payable {
+    /*function switchOwner(address payable from, uint256 assetId) public payable {
         require(isApprovedOrOwner(msg.sender, assetId), 'Neither approved or owner');
-        require(msg.value >= assetMap[assetId].price, 'Payment unsufficient');
-        clearApproval(assetId, getApproved(assetId));
-        address payable _seller = address(uint160(ownerOf(assetId)));
+        require(ownersOf(assetId) == from, "The address is not an owner!");
 
-        ownedAssetsCount[_seller]--;
+        //clearApproval(assetId, getApproved(assetId));
 
+        ownedAssetsCount[from]--;
         ownedAssetsCount[msg.sender]++;
-        assetOwner[assetId] = msg.sender;
-        _seller.transfer(msg.value * 1000000000000000000);
-        emit Transfer(_seller, msg.sender, assetId, msg.value);
-    }
+        assetOwners[assetId] = msg.sender;
 
-    function approve(address to, uint256 assetId) public {
-        address owner = ownerOf(assetId);
-        require(to != owner, "Current Owner");
-        require(msg.sender == owner, "Not asset owner");
-        assetApprovals[assetId] = to;
-        emit Approval(owner, to, assetId);
-    }
+        from.transfer(msg.value);
+        emit Transfer(from, msg.sender, assetId);
+    }*/
 
-    function getApproved(uint256 assetId) public view returns (address) {
-        require(exists(assetId), "Token not exist");
-        return assetApprovals[assetId];
+    function setSharedApproval(address[] memory addresses, uint8[] memory percetange, uint256 assetId) public {
+      address[] memory owners = ownersOf(assetId);
+      for (uint i = 0; i < addresses.length; i++) {
+          require(addresses[i] != owners[i], "Current Owner");
+      }
+      for(uint i = 0; i < addresses.length; i++) {
+          ApprovalFormat memory helper = ApprovalFormat(addresses[i], (percetange[i] * assetMap[assetId].price) / 100);
+          holdSharedApproval[assetId][i] = helper;
+          countApproveAddresses[assetId]++;
+      }
+      emit SharedApproval(owners, assetId);
     }
 
     // Additional functions added to the token //
@@ -84,28 +88,28 @@ contract RealEstate is ERC721 {
     }
 
     function allAssets() public view returns(Asset[] memory) {
-        Asset[] memory helper = new Asset[](assetsCount); // -- always be aware of array length --
+        Asset[] memory helper = new Asset[](assetsCount);
         for (uint i = 0; i < assetsCount; i++) {
             helper[i] = assetMap[i];
         }
         return helper;
     }
 
-    function addAsset(uint256 price, address to, string memory _cid) public {
+    function addAsset(uint256 price, address[] memory owners, string memory _cid) public {
         require(supervisor == msg.sender, 'Not Supervisor');
         assetMap[assetsCount] = Asset(assetsCount, price, _cid);
-        mint(to, assetsCount);
+        mint(owners, assetsCount);
         assetsCount = assetsCount+1;
     }
 
-    function clearApproval(uint256 assetId, address approved) public {
-        if(assetApprovals[assetId] == approved) {
-            assetApprovals[assetId] = address(0);
+   /* function clearApproval(uint256 assetId, address approved) public {
+        if(holdSharedApproval[assetId] == approved) {
+            holdSharedApproval[assetId] = address(0);
         }
-    }
+    }*/
 
     function build(uint256 assetId, uint256 value) public payable {
-         require(isApprovedOrOwner(msg.sender, assetId), "Not an approved Owner");
+        require(isApprovedOrOwner(msg.sender, assetId), "Not an approved Owner");
          Asset memory oldAsset = assetMap[assetId];
          assetMap[assetId] = Asset(oldAsset.assetId, oldAsset.price + value, oldAsset.cid);
     }
@@ -128,34 +132,40 @@ contract RealEstate is ERC721 {
 
     // Functions used internally by another functions //
 
-    function mint(address to, uint256 assetId) internal {
-        require(to != address(0), "ZeroAddressMiniting");
+    function mint(address[] memory owners, uint256 assetId) internal {
+        for(uint i = 0; i < owners.length; i++) {
+          require(owners[i] != address(0), "Zero Address Minting");
+        }
         require(!exists(assetId), "Already Minted");
-        assetOwner[assetId] = to;
-        ownedAssetsCount[to]++;
-        emit Transfer(address(0), to, assetId);
+        assetOwners[assetId] = owners;
+        for (uint i = 0; i < owners.length; i++) {
+            ownedAssetsCount[owners[i]]++;
+        }
+        emit Transfer(address(0), owners, assetId);
     }
 
     function exists(uint256 assetId) internal view returns (bool) {
-        return assetOwner[assetId] != address(0);
+        bool checker = false;
+        for (uint i = 0; i < assetOwners[assetId].length; i++) {
+            checker = assetOwners[assetId][i] != address(0);
+        }
+        return checker;
     }
 
-     function isApprovedOrOwner(address spender, uint256 assetId) internal view returns (bool) {
+     function isApprovedOrOwner(address verify_address, uint256 assetId) internal view returns (bool) {
         require(exists(assetId), "ERC721: operator query for nonexistent token");
-        address owner = ownerOf(assetId);
-        return (spender == owner || getApproved(assetId) == spender);
-    }
-
-    // Unused ERC721 functions //
-    event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
-
-    bytes4 private constant _ERC721_RECEIVED = 0x150b7a02;
-
-    mapping (address => mapping (address => bool)) private _operatorApprovals;
-
-    function setApprovalForAll(address to, bool approved) public {
-        require(to != msg.sender, "ERC721: approve to caller");
-        _operatorApprovals[msg.sender][to] = approved;
-        emit ApprovalForAll(msg.sender, to, approved);
+        bool helper = false;
+        address[] memory owners = ownersOf(assetId);
+        for (uint i = 0; i < owners.length; i++) {
+           if(verify_address == owners[i]) {
+             helper = true;
+           }
+        }
+        for (uint i = 0; i < countApproveAddresses[assetId]; i++) {
+           if(verify_address == holdSharedApproval[assetId][i].approval_address) {
+             helper = true;
+           }
+        }
+        return helper;
     }
 }
