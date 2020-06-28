@@ -3,9 +3,9 @@ pragma experimental ABIEncoderV2;
 
 import "./helper_contracts/ERC721.sol";
 
-///@title Real Estate Exchange
+///@title Real Estate Exchange Market
 ///@author Roberto Carlos
-///@notice This contract represents a property exchange market
+///@notice This contract represents a property exchange market where a property can have multiple owners and buyers. Each property is represented as a ERC721 token.
 
 contract RealEstate is ERC721 {
     struct Asset {
@@ -21,9 +21,9 @@ contract RealEstate is ERC721 {
 
     uint256 public assetsCount;
     mapping(uint256 => Asset) public assetMap;
-    address public supervisor; // check auto-getter fnc Mohamed
+    address public supervisor;
 
-    mapping(uint256 => address[]) private assetOwners; // Now it will hold multiple addrees for further flexibility
+    mapping(uint256 => address[]) private assetOwners;
     mapping(address => uint256) private ownedAssetsCount;
     mapping(uint256 => uint256) public countApproveAddresses;
     mapping(uint256 => mapping(uint256 => ApprovalFormat)) public holdSharedApproval;
@@ -33,12 +33,12 @@ contract RealEstate is ERC721 {
     }
 
 
-    //Events
+    // --- Events ---
     event Transfer(address indexed from, address[] indexed owners, uint256 indexed tokenId);
     event Approval(address indexed owner, address indexed approved, uint256 indexed tokenId);
     event SharedApproval(address[] indexed owners, uint256 indexed tokenId);
 
-    /// Functions inherit from ERC721 ///
+    // --- Functions inherit from ERC721 ---
 
     function balanceOf() public view returns (uint256) {
         require(msg.sender != address(0), "Balance query for the zero address");
@@ -53,20 +53,29 @@ contract RealEstate is ERC721 {
         }
         return owners;
     }
-
-    /*function switchOwner(address payable from, uint256 assetId) public payable {
+    
+    /// @notice Simply transfer the ownership from a ERC721 token to the approved addresses
+    /// @param ownersToBePaid The addresses which will receive the payment from the approved address to buy
+    /// @param assetId The ID of the token which will be purchase
+    /// @dev Current implementation assumes that we pay equally to all the owners, taking into consideration the "percetange". 
+    //       You may want to edit the behaviour to adapt better to your reqs
+    function switchOwners(address[] payable ownersToBePaid, uint256 assetId) public payable {
         require(isApprovedOrOwner(msg.sender, assetId), 'Neither approved or owner');
-        require(ownersOf(assetId) == from, "The address is not an owner!");
+        require(ownersOf(assetId) == ownersToBePaid, "The addresses are not owners");
+        // This step is pendant of refactoring, as the first time run will clear all approvals!!!!
+        clearApproval(assetId);
 
-        //clearApproval(assetId, getApproved(assetId));
+        for(uint i = 0; i < ownersToBePaid.length; i++) {
+            ownedAssetsCount[ownersToBePaid[i]]--
+        }
 
-        ownedAssetsCount[from]--;
         ownedAssetsCount[msg.sender]++;
+
         assetOwners[assetId] = msg.sender;
 
         from.transfer(msg.value);
         emit Transfer(from, msg.sender, assetId);
-    }*/
+    }
 
     function setSharedApproval(address[] memory addresses, uint8[] memory percetange, uint256 assetId) public {
       address[] memory owners = ownersOf(assetId);
@@ -81,7 +90,7 @@ contract RealEstate is ERC721 {
       emit SharedApproval(owners, assetId);
     }
 
-    // Additional functions added to the token //
+    // --- Additional functions added to the ERC721 Token ---
 
     function assetValue(uint256 assetId) public view returns(uint256) {
         return assetMap[assetId].price;
@@ -102,11 +111,11 @@ contract RealEstate is ERC721 {
         assetsCount = assetsCount+1;
     }
 
-   /* function clearApproval(uint256 assetId, address approved) public {
-        if(holdSharedApproval[assetId] == approved) {
-            holdSharedApproval[assetId] = address(0);
-        }
-    }*/
+   function clearApproval(uint256 assetId) public {
+       for (uint i = 0; i < countApproveAddresses[assetId]; i++) {
+           holdSharedApproval[assetId][i].approval_address = address(0);
+       }
+    }
 
     function build(uint256 assetId, uint256 value) public payable {
         require(isApprovedOrOwner(msg.sender, assetId), "Not an approved Owner");
@@ -130,7 +139,7 @@ contract RealEstate is ERC721 {
         return assetsCount;
     }
 
-    // Functions used internally by another functions //
+    // --- Functions used internally by another functions ---
 
     function mint(address[] memory owners, uint256 assetId) internal {
         for(uint i = 0; i < owners.length; i++) {
